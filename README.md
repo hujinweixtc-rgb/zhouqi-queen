@@ -2,7 +2,7 @@
 
 把公众号「**周期女王**」的历史文章做成了一个**单文件在线目录**：189 篇内容（长文 + 午评 + 札记）配上每篇发文当天的市场数据快照，水墨松鹤风排版，手机电脑都能看。
 
-**在线阅读**：GitHub Pages 开启后访问 → `https://hujinweixtc-rgb.github.io/zhouqi-queen/%E5%91%A8%E6%9C%9F%E5%A5%B3%E7%8E%8B%E6%96%87%E7%AB%A0%E7%9B%AE%E5%BD%95.html`
+**在线阅读**：GitHub Pages 开启后访问 → `https://hujinweixtc-rgb.github.io/zhouqi-queen/`
 
 ---
 
