@@ -67,6 +67,17 @@ h1 small{display:block;font-size:12.5px;letter-spacing:5px;color:var(--gold);fon
   background:var(--panel);font-size:14px;color:var(--ink);outline:none}
 #q:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(176,58,46,.12)}
 #q::-webkit-search-cancel-button{-webkit-appearance:none}
+/* 搜索行 + 未读筛选按钮 */
+.searchrow{display:flex;gap:10px;align-items:stretch;margin:0 0 18px}
+.searchrow .searchbox{flex:1;min-width:0;margin:0}
+.ubt{display:flex;align-items:center;gap:5px;padding:0 14px;border:1px solid var(--line);border-radius:10px;
+  background:var(--panel);color:var(--ink2);font-size:12.5px;cursor:pointer;user-select:none;white-space:nowrap;
+  transition:all .15s}
+.ubt b{font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+.ubt:hover{color:var(--gold);border-color:rgba(176,58,46,.5)}
+.ubt.on{background:rgba(176,58,46,.07);border-color:var(--gold);color:var(--gold)}
+.ubt.on b{color:var(--gold)}
+.ubt.zero{opacity:.5}
 .panel{display:none}.panel.on{display:block}
 
 /* 时间轴 */
@@ -184,6 +195,7 @@ footer{margin-top:14px;padding-top:16px;border-top:1px solid var(--line);color:#
   .snap .s{min-width:50%;flex-basis:50%;border-bottom:1px solid var(--line)}
   .tabs{overflow-x:auto}
   .sortbtn{padding:6px 10px;font-size:11.5px}
+  .ubt{padding:0 10px;font-size:12px;gap:4px}
   .msep{top:0;font-size:12px;padding:8px 2px 6px}
   #totop{right:14px;bottom:18px}
 }
@@ -208,9 +220,12 @@ footer{margin-top:14px;padding-top:16px;border-top:1px solid var(--line);color:#
   <div class="tab" data-p="p3">经典索引</div>
 </div>
 
-<div class="searchbox">
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a39a88" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/></svg>
-  <input id="q" type="search" placeholder="搜索标题 / 判断 / 引文关键词，如：分歧 / 退潮 / 孙子 / 道德经">
+<div class="searchrow">
+  <div class="searchbox">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a39a88" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/></svg>
+    <input id="q" type="search" placeholder="搜索标题 / 判断 / 引文关键词，如：分歧 / 退潮 / 孙子 / 道德经">
+  </div>
+  <div class="ubt" id="ubt" role="button" tabindex="0" title="只看未读">未读 <b id="ubc">0</b></div>
 </div>
 
 <div class="panel on" id="p1"><div style="display:flex;justify-content:flex-end;padding:2px 2px 10px"><div class="sortbtn" id="sortbtn" style="margin-left:0">⇅ 最新在上</div></div><div class="tl" id="tl"></div></div>
@@ -268,6 +283,7 @@ function toggleRead(btn){
   saveRead();
   // 同步所有同 URL 的按钮（时间轴/心法册/札记可能同文出现）
   document.querySelectorAll('[data-url="' + url.replace(/"/g, '\\"') + '"] .ckbtn').forEach(b => b.classList.toggle('on', readSet.has(url)));
+  if (typeof afterReadChange === 'function') afterReadChange();
 }
 
 // ===== 时间轴 =====
@@ -516,7 +532,7 @@ function renderSg(list){
   });
   // 重新渲染后同步搜索过滤状态（此时 q 可能尚未初始化，直接取 DOM）
   const qEl = document.getElementById('q');
-  if (qEl && qEl.value.trim()) qEl.dispatchEvent(new Event('input'));
+  if (qEl) qEl.dispatchEvent(new Event('input'));
 }
 renderSg(SG_SERIES);
 
@@ -592,8 +608,7 @@ cgrid.addEventListener('click', e => {
     x.style.background = x === c ? 'var(--panel2)' : 'var(--panel)';
   });
   renderQ(curSel);
-  const q = document.getElementById('q').value.trim().toLowerCase();
-  if (q) document.getElementById('q').dispatchEvent(new Event('input'));
+  document.getElementById('q').dispatchEvent(new Event('input'));
 });
 [...cgrid.children][0].style.borderColor = 'var(--gold)';
 
@@ -606,8 +621,36 @@ document.querySelector('.tabs').addEventListener('click', e => {
   document.getElementById('q').dispatchEvent(new Event('input'));
 });
 
-// ===== 搜索 =====
+// ===== 搜索 + 未读筛选 =====
 const q = document.getElementById('q');
+const ubt = document.getElementById('ubt');
+const ubc = document.getElementById('ubc');
+let unreadOnly = false;
+
+// 当前面板的未读篇数（按 URL 去重；经典索引按引文所属文章计）
+function panelUnread(panel) {
+  const seen = new Set();
+  if (panel.id === 'p3') {
+    panel.querySelectorAll('.qi2 a[href]').forEach(a => { if (!readSet.has(a.href)) seen.add(a.href); });
+  } else {
+    panel.querySelectorAll('[data-url]').forEach(el => {
+      const u = el.dataset.url;
+      if (u && !readSet.has(u)) seen.add(u);
+    });
+  }
+  return seen.size;
+}
+function refreshUnread() {
+  const panel = document.querySelector('.panel.on');
+  const n = panel ? panelUnread(panel) : 0;
+  ubc.textContent = n;
+  ubt.classList.toggle('zero', n === 0);
+  return n;
+}
+function afterReadChange() {
+  refreshUnread();
+  if (unreadOnly) setTimeout(applyFilter, 120);   // 只看未读时，勾完让它淡出
+}
 // 日期智能匹配："1.23"/"1-23"/"1月23" → 任意年份的 01-23；"2025.1.23" → 精确当天
 function dateQ(k) {
   const s = k.replace(/[年月.\/]+/g, '-').replace(/日/g, '');
@@ -617,10 +660,11 @@ function dateQ(k) {
   if (m) return '-' + String(+m[1]).padStart(2, '0') + '-' + String(+m[2]).padStart(2, '0');
   return null;
 }
-q.addEventListener('input', () => {
+function applyFilter() {
+  const panel = document.querySelector('.panel.on');
+  if (!panel) return;
   const k = q.value.trim().toLowerCase();
   const dq = k ? dateQ(k) : null;
-  const panel = document.querySelector('.panel.on');
   let shown = 0;
   panel.querySelectorAll('[data-k]').forEach(el => {
     let ok;
@@ -630,16 +674,33 @@ q.addEventListener('input', () => {
     } else {
       ok = !k || el.dataset.k.includes(k);
     }
+    if (ok && unreadOnly) {
+      const u = el.dataset.url;
+      if (u && readSet.has(u)) ok = false;
+    }
     el.classList.toggle('hide', !ok);
     if (ok) shown++;
   });
-  // 搜索时隐藏札记系列分组标题
-  panel.querySelectorAll('.sgh').forEach(h => h.classList.toggle('hide', !!k));
+  // 札记系列分组标题：搜索时隐藏；只看未读时按组内是否还有可见条目决定
+  panel.querySelectorAll('.sgh').forEach(h => {
+    if (k) { h.classList.add('hide'); return; }
+    if (!unreadOnly) { h.classList.remove('hide'); return; }
+    let n = h.nextElementSibling, vis = false;
+    while (n && !n.classList.contains('sgh')) {
+      if (n.classList.contains('essay') && !n.classList.contains('hide')) { vis = true; break; }
+      n = n.nextElementSibling;
+    }
+    h.classList.toggle('hide', !vis);
+  });
   // 经典索引：按条目过滤
   if (panel.id === 'p3') {
     let qs = 0;
     panel.querySelectorAll('.qi2').forEach(el => {
-      const ok = !k || el.textContent.toLowerCase().includes(k);
+      let ok = !k || el.textContent.toLowerCase().includes(k);
+      if (ok && unreadOnly) {
+        const a = el.querySelector('a[href]');
+        if (a && readSet.has(a.href)) ok = false;
+      }
       el.classList.toggle('hide', !ok);
       if (ok) qs++;
     });
@@ -649,9 +710,22 @@ q.addEventListener('input', () => {
     });
     shown = qs;
   }
-  document.getElementById('empty').style.display = shown ? 'none' : 'block';
-});
+  const empty = document.getElementById('empty');
+  empty.textContent = (unreadOnly && !k) ? '这一栏的未读已经看完' : '没有匹配的内容';
+  empty.style.display = shown ? 'none' : 'block';
+  refreshUnread();
+}
+q.addEventListener('input', applyFilter);
+function toggleUnread() {
+  unreadOnly = !unreadOnly;
+  ubt.classList.toggle('on', unreadOnly);
+  ubt.title = unreadOnly ? '显示全部' : '只看未读';
+  applyFilter();
+}
+ubt.addEventListener('click', toggleUnread);
+ubt.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleUnread(); } });
 q.addEventListener('keydown', e => { if (e.key === 'Escape') { q.value = ''; q.dispatchEvent(new Event('input')); } });
+refreshUnread();
 
 // ===== 回顶部 =====
 const totop = document.getElementById('totop');
